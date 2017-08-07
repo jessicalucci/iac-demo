@@ -1,0 +1,4 @@
+.idea/*
+.vagrant/
+playbook.retry
+roles/mysql/files/inserts.sql

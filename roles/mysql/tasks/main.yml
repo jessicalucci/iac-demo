@@ -1,0 +1,81 @@
+---
+- yum:
+    name: 'http://www.percona.com/downloads/percona-release/redhat/0.1-4/percona-release-0.1-4.noarch.rpm'
+    state: present
+
+- name: install percona mysql
+  yum: state=present name={{ item }}
+  with_items:
+    - 'Percona-Server-client-56.x86_64'
+    - 'Percona-Server-server-56.x86_64'
+
+- name: create mysql config file
+  copy:
+    # mostly the default
+    content: |
+      [mysqld]
+      skip-host-cache
+      skip-name-resolve
+      innodb_buffer_pool_size = 64M
+      key_buffer = 16K
+      datadir=/var/lib/mysql
+      socket=/var/lib/mysql/mysql.sock
+      performance_schema=off
+      bind-address = 0.0.0.0
+      local-infile = 0
+      # Disabling symbolic-links is recommended to prevent assorted security risks
+      symbolic-links=0
+
+      [mysqld_safe]
+      nice=0
+      syslog
+      pid-file=/var/run/mysqld/mysqld.pid
+    dest: '/etc/my.cnf'
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart mysql
+
+- name: start mysql
+  service: name=mysql state=started enabled=yes
+
+- name: install mysql python modules for ansible to work
+  yum: state=present name=MySQL-python
+
+- name: initialize mysql users
+  mysql_user:
+    state: present
+    host: '%'
+    name: 'iac_user'
+    priv: '*.*:ALL,GRANT'
+    password: 'iac_password'
+
+- name: copy schema over
+  copy: src='schema.sql' dest='/tmp/schema.sql'
+
+- name: copy inserts over
+  copy: src='inserts.sql' dest='/tmp/inserts.sql'
+
+- name: create relevant databases
+  mysql_db: state=present name='iacdb'
+
+- name: check if iacdb is initialized
+  stat: path=/tmp/init_iacdb
+  register: init_iacdb
+
+- name: initialize iacdb
+  mysql_db:
+    name: 'iacdb'
+    state: import
+    target: '/tmp/schema.sql'
+  when: init_iacdb.stat.exists == false
+
+- name: insert hosts
+  mysql_db:
+    name: 'iacdb'
+    state: import
+    target: '/tmp/inserts.sql'
+
+- file: state=touch path=/tmp/init_iacdb
+  when: init_iacdb.stat.exists == false

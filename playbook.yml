@@ -1,0 +1,15 @@
+---
+- hosts: all
+  gather_facts: true
+
+- hosts: database
+  gather_facts: True
+  become: true
+  roles:
+    - mysql
+
+- hosts: webservers
+  gather_facts: True
+  become: true
+  roles:
+    - web
